@@ -1,0 +1,458 @@
+<form>
+  <label>Classification Algorithm Evaluation</label>
+  <search id="baseSearch">
+    <query>$source_tok$
+    | eval true_positive = if($predicted_tok$ = 1 and $true_labels_tok$ = 1, 1, 0)
+    | eval false_positive = if($predicted_tok$ = 1 and $true_labels_tok$ = 0, 1, 0)
+    | eval true_negative = if($predicted_tok$ = 0 and $true_labels_tok$ = 0, 1, 0)
+    | eval false_negative = if($predicted_tok$ = 0 and $true_labels_tok$ = 1, 1, 0)
+    | stats count, sum($true_labels_tok$) as true_labels, sum(true_positive) as true_positives, sum(false_positive) as false_positives, sum(true_negative) as true_negatives, sum(false_negative) as false_negatives
+    | eval true_positives_perc = round(true_positives / count * 100, 2)
+    | eval true_negatives_perc = round(true_negatives / count * 100, 2)
+    | eval false_positives_perc = round(false_positives / count * 100, 2)
+    | eval false_negatives_perc = round(false_negatives / count * 100, 2)
+    | fields *
+    </query>
+    <earliest>0</earliest>
+    <sampleRatio>1</sampleRatio>
+  </search>
+  <search id="baseSearchByAuditedField">
+    <query>$source_tok$
+    | eval true_positive = if($predicted_tok$ = 1 and $true_labels_tok$ = 1, 1, 0)
+    | eval false_positive = if($predicted_tok$ = 1 and $true_labels_tok$ = 0, 1, 0)
+    | eval true_negative = if($predicted_tok$ = 0 and $true_labels_tok$ = 0, 1, 0)
+    | eval false_negative = if($predicted_tok$ = 0 and $true_labels_tok$ = 1, 1, 0)
+    | stats count, sum($true_labels_tok$) as true_labels, sum(true_positive) as true_positives, sum(false_positive) as false_positives, sum(true_negative) as true_negatives, sum(false_negative) as false_negatives by $audit_tok$
+    | join reference [search $source_tok$
+      |  where $audit_tok$=$reference_tok$
+      |  eval true_positive_r = if($predicted_tok$ = 1 and $true_labels_tok$ = 1, 1, 0)  |  eval false_positive_r = if($predicted_tok$ = 1 and $true_labels_tok$ = 0, 1, 0)
+      |  eval true_negative_r = if($predicted_tok$ = 0 and $true_labels_tok$ = 0, 1, 0)  |  eval false_negative_r = if($predicted_tok$ = 0 and $true_labels_tok$ = 1, 1, 0)
+      |  stats count as count_r, sum($true_labels_tok$) as true_labels_r, sum(true_positive_r) as true_positives_r, sum(false_positive_r) as false_positives_r, sum(true_negative_r) as true_negatives_r, sum(false_negative_r) as false_negatives_r by $audit_tok$
+      |  stats sum(count_r) as count_ref, sum(true_labels_r) as true_labels_ref, sum(true_positives_r) as true_positives_ref, sum(true_negatives_r) as true_negatives_ref, sum(false_positives_r) as false_positives_ref, sum(false_negatives_r) as false_negatives_ref]
+    |  eval true_positives_perc = round(true_positives / count * 100, 2)
+    |  eval false_positives_perc = round(false_positives / count * 100, 2)
+    |  eval true_negatives_perc = round(true_negatives / count  * 100, 2)
+    |  eval false_negatives_perc = round(false_negatives / count  * 100, 2)
+    |  eval true_positives_perc_ref = round(true_positives_ref / count_ref * 100, 2)
+    |  eval false_positives_perc_ref = round(false_positives_ref / count_ref * 100, 2)
+    |  eval true_negatives_perc_ref = round(true_negatives_ref / count_ref  * 100, 2)
+    |  eval false_negatives_perc_ref = round(false_negatives_ref / count_ref  * 100, 2)
+    | fields * </query>
+    <sampleRatio>1</sampleRatio>
+  </search>
+  <fieldset submitButton="false">
+    <input type="text" token="source_tok">
+      <label>Source Type</label>
+    </input>
+    <input type="dropdown" token="audit_tok">
+      <label>Audited Field</label>
+      <fieldForLabel>field</fieldForLabel>
+      <fieldForValue>field</fieldForValue>
+      <search>
+        <query>$source_tok$
+| fieldsummary
+| fields  field</query>
+      </search>
+    </input>
+    <input type="dropdown" token="reference_tok">
+      <label>Reference Group</label>
+      <prefix>"</prefix>
+      <suffix>"</suffix>
+      <fieldForLabel>$audit_tok$</fieldForLabel>
+      <fieldForValue>$audit_tok$</fieldForValue>
+      <search>
+        <query>$source_tok$ | table $audit_tok$
+| dedup $audit_tok$</query>
+      </search>
+    </input>
+    <input type="time" token="field1">
+      <label></label>
+      <default>
+        <earliest>0</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+    <input type="dropdown" token="true_labels_tok">
+      <label>True Labels</label>
+      <fieldForLabel>field</fieldForLabel>
+      <fieldForValue>field</fieldForValue>
+      <search>
+        <query>$source_tok$
+| fieldsummary
+| fields  field</query>
+      </search>
+    </input>
+    <input type="dropdown" token="predicted_tok">
+      <label>Prediction Field</label>
+      <default>predicted($labels_tok$)</default>
+      <fieldForLabel>field</fieldForLabel>
+      <fieldForValue>field</fieldForValue>
+      <search>
+        <query>$source_tok$
+| fieldsummary
+| fields  field</query>
+      </search>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <title>Representation by Category</title>
+      <chart>
+        <title>Count of data points for each category</title>
+        <search base="baseSearchByAuditedField">
+          <query>search
+          |  stats sum(count) as count by $audit_tok$
+          |  sort -count
+          |  rename count as "Total by Category"
+          |  table $audit_tok$, "Total by Category"</query>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.legend.placement">none</option>
+        <option name="refresh.display">progressbar</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Representation Bias</title>
+      <table>
+        <title>Percentage difference with respect to reference category</title>
+        <search base="baseSearchByAuditedField">
+          <query>search
+          |  stats sum(count) as count, sum(count_ref) as count_ref by $audit_tok$
+          |  eval difference = round((count - count_ref) / count_ref * 100, 2)
+          |  sort -difference | eval difference = tostring(difference) + "%"
+| rename difference as "Representation Difference"
+          |  rename count as "Total by Category"
+          |  table $audit_tok$, "Total by Category", "Representation Difference"</query>
+        </search>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="percentagesRow">false</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+        <format type="color" field="difference">
+          <colorPalette type="list">[#DC4E41,#F8BE34,#B6C75A,#F8BE34,#DC4E41]</colorPalette>
+          <scale type="threshold">-50,-20,20,50</scale>
+        </format>
+        <format type="color" field="Representation Difference">
+          <colorPalette type="list">[#DC4E41,#F1813F,#53A051,#F1813F,#DC4E41]</colorPalette>
+          <scale type="threshold">-40,-10,10,40</scale>
+        </format>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>True Labels by Category</title>
+      <chart>
+        <title>Percentage of "true labels" by category</title>
+        <search base="baseSearchByAuditedField">
+          <query>search
+            |  eval true_labels = round(true_labels / count * 100, 2)
+            |  table $audit_tok$, true_labels
+            |  sort -true_labels | rename true_labels as "True Labels"</query>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.abbreviation">none</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.abbreviation">none</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.abbreviation">none</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.mode">standard</option>
+        <option name="charting.legend.placement">none</option>
+        <option name="charting.lineWidth">2</option>
+        <option name="trellis.enabled">0</option>
+        <option name="trellis.scales.shared">1</option>
+        <option name="trellis.size">medium</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>True Labels Bias</title>
+      <table>
+        <title>Percentage difference with respect to reference category</title>
+        <search base="baseSearchByAuditedField">
+          <query>search
+            |  eval true_labels = round(true_labels / count * 100, 2)
+            |  eval true_labels_ref = round(true_labels_ref / count_ref * 100, 2)
+            |  stats sum(true_labels) as true_labels, sum(true_labels_ref) as true_labels_ref by $audit_tok$
+            |  eval difference = round((true_labels - true_labels_ref) / true_labels_ref * 100, 2)
+            |  sort -difference
+|  eval difference = tostring(difference) + "%"
+            | rename difference as "True Labels Difference"
+            |  rename true_labels as "Percentage by Category"
+            |  table $audit_tok$, "Percentage by Category", "True Labels Difference"</query>
+        </search>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="percentagesRow">false</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+        <format type="color" field="difference">
+          <colorPalette type="list">[#DC4E41,#F8BE34,#B6C75A,#F8BE34,#DC4E41]</colorPalette>
+          <scale type="threshold">-50,-20,20,50</scale>
+        </format>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Confusion Matrix</title>
+      <chart>
+        <title>True vs predicted results in percentage</title>
+        <search base="baseSearch">
+          <query>search
+            |  stats sum(true_positives_perc) as "True Positives", sum(true_negatives_perc) as "True Negatives", sum(false_positives_perc) as "False Positives", sum(false_negatives_perc) as "False Negatives" |  table "True Positives", "True Negatives", "False Positives", "False Negatives"
+            |  transpose
+            |  rename column as "True vs Predicted"
+            |  rename "row 1" as "Percentage"</query>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.abbreviation">none</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.abbreviation">none</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.abbreviation">none</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.mode">standard</option>
+        <option name="charting.legend.placement">none</option>
+        <option name="charting.lineWidth">2</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="trellis.enabled">0</option>
+        <option name="trellis.scales.shared">1</option>
+        <option name="trellis.size">medium</option>
+        <option name="trellis.splitBy">_aggregation</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Confusion Matrix by Category</title>
+      <chart>
+        <title>True vs predicted results by category</title>
+        <search base="baseSearchByAuditedField">
+          <query>search
+          |  stats sum(true_positives_perc) as "True Positives", sum(true_negatives_perc) as "True Negatives", sum(false_positives_perc) as "False Positives", sum(false_negatives_perc) as "False Negatives" by $audit_tok$
+|  table $audit_tok$, "True Positives", "True Negatives", "False Positives", "False Negatives"</query>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.abbreviation">none</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.abbreviation">none</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.abbreviation">none</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.mode">standard</option>
+        <option name="charting.legend.placement">right</option>
+        <option name="charting.lineWidth">2</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="trellis.enabled">0</option>
+        <option name="trellis.scales.shared">1</option>
+        <option name="trellis.size">medium</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Precision Rate by Category</title>
+      <chart>
+        <title>Out of all positive predictions, how often is the model correct</title>
+        <search base="baseSearchByAuditedField">
+          <query>search
+            |  eval precision = round(true_positives / (false_positives + true_positives)  * 100, 2)
+            |  table $audit_tok$, precision
+            |  sort -precision
+            | rename precision as "Precision Rate"</query>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.abbreviation">none</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.abbreviation">none</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.abbreviation">none</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.mode">standard</option>
+        <option name="charting.legend.placement">none</option>
+        <option name="charting.lineWidth">2</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="trellis.enabled">0</option>
+        <option name="trellis.scales.shared">1</option>
+        <option name="trellis.size">medium</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Precision Bias</title>
+      <table>
+        <title>Percentage difference in precision rate by category</title>
+        <search base="baseSearchByAuditedField">
+          <query>|  eval precision = true_positives / (false_positives + true_positives)
+            |  eval precision_ref = true_positives_ref / (false_positives_ref + true_positives_ref)
+            |  eval difference = round((precision - precision_ref) / precision_ref * 100, 2) | sort -difference
+|  eval difference = tostring(difference) + "%"
+|  rename difference as "Difference in Precision Rate"
+            |  table $audit_tok$, "Difference in Precision Rate"</query>
+        </search>
+        <option name="count">20</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="percentagesRow">false</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+        <format type="color" field="Difference in False Positives Rate">
+          <colorPalette type="list">[#DC4E41,#F1813F,#53A051,#F1813F,#DC4E41]</colorPalette>
+          <scale type="threshold">-50,-10,10,50</scale>
+        </format>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Recall Rate by Category</title>
+      <chart>
+        <title>Out of all true labels, how often is my model making a positive prediction</title>
+        <search base="baseSearchByAuditedField">
+          <query>search
+            |  eval recall = round(true_positives / (true_positives + false_negatives) * 100, 2)
+            |  table $audit_tok$, recall
+            |  sort -recall
+            | rename recall as "Recall Rate"</query>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.abbreviation">none</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.abbreviation">none</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.abbreviation">none</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.mode">standard</option>
+        <option name="charting.legend.placement">none</option>
+        <option name="charting.lineWidth">2</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="trellis.enabled">0</option>
+        <option name="trellis.scales.shared">1</option>
+        <option name="trellis.size">medium</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Recall Bias</title>
+      <table>
+        <title>Percentage difference in recall rate by category</title>
+        <search base="baseSearchByAuditedField">
+          <query>|  eval recall = true_positives / (true_positives + false_negatives)
+            |  eval recall_ref = true_positives_ref / (false_negatives_ref + true_positives_ref)
+            |  eval difference = round((recall - recall_ref) / recall_ref * 100, 2)
+|  sort -difference
+|  eval difference = tostring(difference) + "%"
+|  rename difference as "Difference in Recall Rate"
+            |  table $audit_tok$, "Difference in Recall Rate"</query>
+        </search>
+        <option name="count">20</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="percentagesRow">false</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+        <format type="color" field="Difference in False Positives Rate">
+          <colorPalette type="list">[#DC4E41,#F1813F,#53A051,#F1813F,#DC4E41]</colorPalette>
+          <scale type="threshold">-50,-10,10,50</scale>
+        </format>
+      </table>
+    </panel>
+  </row>
+</form>
