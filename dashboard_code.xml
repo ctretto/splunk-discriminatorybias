@@ -42,7 +42,7 @@
   </search>
   <fieldset submitButton="false">
     <input type="text" token="source_tok">
-      <label>Source Type</label>
+      <label>Data Source</label>
     </input>
     <input type="dropdown" token="audit_tok">
       <label>Audited Field</label>
@@ -73,7 +73,7 @@
       </default>
     </input>
     <input type="dropdown" token="true_labels_tok">
-      <label>True Labels</label>
+      <label>Real Outcomes</label>
       <fieldForLabel>field</fieldForLabel>
       <fieldForValue>field</fieldForValue>
       <search>
@@ -83,7 +83,7 @@
       </search>
     </input>
     <input type="dropdown" token="predicted_tok">
-      <label>Prediction Field</label>
+      <label>Predicted Outcomes</label>
       <default>predicted($labels_tok$)</default>
       <fieldForLabel>field</fieldForLabel>
       <fieldForValue>field</fieldForValue>
@@ -145,14 +145,14 @@
   </row>
   <row>
     <panel>
-      <title>True Labels by Category</title>
+      <title>Real Outcomes by Category</title>
       <chart>
-        <title>Percentage of "true labels" by category</title>
+        <title>Percentage of real outcomes by category</title>
         <search base="baseSearchByAuditedField">
           <query>search
             |  eval true_labels = round(true_labels / count * 100, 2)
             |  table $audit_tok$, true_labels
-            |  sort -true_labels | rename true_labels as "True Labels"</query>
+            |  sort -true_labels | rename true_labels as "Real Outcomes"</query>
         </search>
         <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
         <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
@@ -188,7 +188,7 @@
       </chart>
     </panel>
     <panel>
-      <title>True Labels Bias</title>
+      <title>Real Outcomes Bias</title>
       <table>
         <title>Percentage difference with respect to reference category</title>
         <search base="baseSearchByAuditedField">
@@ -199,9 +199,9 @@
             |  eval difference = round((true_labels - true_labels_ref) / true_labels_ref * 100, 2)
             |  sort -difference
 |  eval difference = tostring(difference) + "%"
-            | rename difference as "True Labels Difference"
+            | rename difference as "Real Outcomes Difference"
             |  rename true_labels as "Percentage by Category"
-            |  table $audit_tok$, "Percentage by Category", "True Labels Difference"</query>
+            |  table $audit_tok$, "Percentage by Category", "Real Outcomes Difference"</query>
         </search>
         <option name="dataOverlayMode">none</option>
         <option name="drilldown">none</option>
@@ -221,12 +221,12 @@
     <panel>
       <title>Confusion Matrix</title>
       <chart>
-        <title>True vs predicted results in percentage</title>
+        <title>Real vs predicted results in percentage</title>
         <search base="baseSearch">
           <query>search
             |  stats sum(true_positives_perc) as "True Positives", sum(true_negatives_perc) as "True Negatives", sum(false_positives_perc) as "False Positives", sum(false_negatives_perc) as "False Negatives" |  table "True Positives", "True Negatives", "False Positives", "False Negatives"
             |  transpose
-            |  rename column as "True vs Predicted"
+            |  rename column as "Real vs Predicted"
             |  rename "row 1" as "Percentage"</query>
         </search>
         <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
