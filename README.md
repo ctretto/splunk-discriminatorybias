@@ -28,7 +28,7 @@ Use the dashboard filters to identify your dataset and the fields you want to ex
 
 | Filter | Description | Example |
 | -------- | --------- | -------- |
-| Data Source | Search to specify the dataset to use in the dashboard. Can include transformations on the data. | sourcetype = "data.csv" \| apply("ClassificationModel") \| eval true_outcomes = if("Successfulpurchase", 1, 0) |
+| Data Source | Search to specify the dataset to use in the dashboard. Can include transformations on the data. | sourcetype = "data.csv" \| apply("ClassificationModel") \| eval true_outcomes = if("SuccessfulPurchase", 1, 0) |
 | Audited Field | Field that represents the sensitive attribute that identifies bias. Must be categorical, such as race, gender, or age group. | age_range |
 | Reference Group | Field that specifies a group to reference, because bias is a relative measure. | Middle Aged |
 | Real Outcomes | Field name for the real outcomes, to identify what is true in reality. Value of the field must be 1 or 0. | true_outcomes |
